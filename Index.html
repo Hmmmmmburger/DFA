@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DFA 組裝性檢查清單</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f4f4f2;
+    --surface: #ffffff;
+    --border: #d0d0cc;
+    --border-light: #e8e8e4;
+    --text: #1c1c1a;
+    --muted: #888880;
+    --label: #555550;
+    --green-dark: #1a6038;
+    --red-dark: #981825;
+    --blue: #1a3e78;
+    --sans: 'Calibri', 'Microsoft JhengHei', '微軟正黑體', sans-serif;
+    --mono: 'Calibri', 'Microsoft JhengHei', '微軟正黑體', monospace;
+  }
+
+  body { background: var(--bg); font-family: var(--sans); color: var(--text); }
+
+  .app { min-height: 100vh; padding: 28px 20px 80px; max-width: 1200px; margin: 0 auto; }
+
+  /* ── Card (exact from TA) ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 18px; border-bottom: 1px solid var(--border-light);
+  }
+  .card-num {
+    font-family: var(--mono); font-size: .65rem; font-weight: 600;
+    letter-spacing: .08em; background: var(--text); color: #fff;
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .card-title { font-size: .78rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; flex: 1; }
+  .card-body  { padding: 16px 18px; }
+
+  /* ── Header (exact from TA .hdr) ── */
+  .hdr { padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; }
+  .hdr h1 { font-size: 1rem; font-weight: 700; letter-spacing: .02em; }
+  .hdr p  { font-size: .7rem; color: var(--muted); margin-top: 3px; letter-spacing: .04em; }
+
+  /* ── PDF button (exact from TA) ── */
+  .btn-pdf {
+    font-family: var(--sans); font-size: .72rem; font-weight: 600;
+    background: var(--text); color: #fff; border: none;
+    padding: 7px 16px; border-radius: 7px; cursor: pointer;
+    letter-spacing: .04em; white-space: nowrap; transition: opacity .15s; flex-shrink: 0;
+  }
+  .btn-pdf:hover { opacity: .72; }
+
+  /* ── Stats strip ── */
+  .stat-row { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+  .stat-chip {
+    font-family: var(--mono); font-size: .66rem; color: var(--muted);
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 5px; padding: 3px 10px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .stat-chip b { font-size: .8rem; color: var(--text); font-weight: 700; }
+  .stat-chip.s-pass b { color: var(--green-dark); }
+  .stat-chip.s-fail b { color: var(--red-dark); }
+  .stat-chip.s-blue b { color: var(--blue); }
+
+  /* ── Row spacing ── */
+  .row-full { margin-bottom: 14px; }
+
+  /* ── Collapsible (exact from TA) ── */
+  .col-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 18px; cursor: pointer; user-select: none; transition: background .15s;
+  }
+  .col-hdr:hover { background: var(--bg); }
+  .col-hdr.open  { border-bottom: 1px solid var(--border-light); }
+  .col-left { display: flex; align-items: center; gap: 12px; }
+  .col-toggle { font-family: var(--mono); font-size: .66rem; color: var(--muted); }
+  .col-body      { display: none; }
+  .col-body.open { display: block; }
+
+  .sec-count {
+    font-family: var(--mono); font-size: .6rem; color: var(--muted);
+    background: var(--border-light); border: 1px solid var(--border);
+    padding: 1px 7px; border-radius: 4px;
+  }
+  .card-sub { font-size: .62rem; color: var(--muted); letter-spacing: .03em; }
+
+  /* ── Table (exact from TA .rt) ── */
+  .rt { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .rt th {
+    font-size: .7rem; letter-spacing: .04em; color: var(--label);
+    font-weight: 600; text-align: center; padding: 0 5px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .rt td {
+    padding: 7px 5px; border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+  .rt tbody tr:last-child td { border-bottom: none; }
+  .rt tbody tr:hover        { background: #fafaf8; }
+  .rt tbody tr.st-pass      { background: #e6f5ec; }
+  .rt tbody tr.st-fail      { background: #faeaec; }
+  .rt tbody tr.st-na        { background: var(--bg); }
+
+  .td-n {
+    width: 36px; text-align: center;
+    font-family: var(--mono); font-size: .68rem; color: var(--muted); font-weight: 600;
+  }
+  .td-desc { font-size: .8rem; color: var(--text); line-height: 1.55; padding-left: 8px; }
+  .td-status { width: 148px; text-align: center; }
+  .td-note   { width: 176px; }
+
+  /* ── Status buttons ── */
+  .btn-grp { display: flex; gap: 3px; justify-content: center; }
+  .s-btn {
+    font-family: var(--sans); font-size: .63rem; font-weight: 600;
+    padding: 4px 8px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+    cursor: pointer; letter-spacing: .01em; transition: all .12s; white-space: nowrap;
+  }
+  .s-btn:hover { border-color: var(--text); color: var(--text); }
+  .s-btn.act-pass { background: #e6f5ec; border-color: #a8d4bc; color: var(--green-dark); }
+  .s-btn.act-fail { background: #faeaec; border-color: #d4a8b0; color: var(--red-dark); }
+  .s-btn.act-na   { background: var(--bg); border-color: var(--border); color: var(--muted); font-style: italic; }
+
+  /* ── Note input (styled like TA .cell-inp) ── */
+  .td-note input {
+    font-family: var(--mono); font-size: .76rem;
+    border: 1px solid var(--border-light); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+    padding: 5px 7px; outline: none; width: 100%; transition: border-color .15s;
+  }
+  .td-note input:hover { border-color: var(--border); }
+  .td-note input:focus { border-color: var(--text); }
+
+  .footer {
+    text-align: center; font-size: .64rem; color: var(--muted);
+    margin-top: 28px; letter-spacing: .06em;
+  }
+
+  @media print {
+    body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .app { padding: 0; max-width: 100%; }
+    .card { box-shadow: none !important; border-radius: 6px !important; page-break-inside: avoid; }
+    .col-body { display: block !important; }
+    .btn-pdf { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══ Header ══ -->
+  <div class="row-full">
+    <div class="card hdr">
+      <div>
+        <h1>DFA 組裝性檢查清單</h1>
+        <p>Design for Assembly — Review Checklist</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div class="stat-row">
+          <div class="stat-chip">總計 <b id="s-total">48</b></div>
+          <div class="stat-chip s-pass">符合 <b id="s-pass">0</b></div>
+          <div class="stat-chip s-fail">待改善 <b id="s-fail">0</b></div>
+          <div class="stat-chip">N/A <b id="s-na">0</b></div>
+          <div class="stat-chip s-blue">未評估 <b id="s-open">48</b></div>
+        </div>
+        <button class="btn-pdf" onclick="window.print()">列印 / PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 01 零件整合 ══ -->
+  <div class="row-full card">
+    <div class="col-hdr open" onclick="tog(this)">
+      <div class="col-left"><span class="card-num">01</span><span class="card-title">零件整合</span><span class="card-sub">零件最小化、標準化與功能整合</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="sec-count">6 項</span><span class="col-toggle">▲ 收合</span></div>
+    </div>
+    <div class="col-body open"><table class="rt"><thead><tr><th style="width:36px">#</th><th style="text-align:left;padding-left:8px">檢查說明</th><th style="width:148px">評估結果</th><th style="width:176px;text-align:left;padding-left:6px">備註</th></tr></thead><tbody>
+      <tr id="r1"><td class="td-n">1</td><td class="td-desc">確認每個零件是否必要，相同功能盡量使用單一零件達成目的</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(1,'pass')">✓ 符合</button><button class="s-btn" onclick="st(1,'fail')">△ 待改善</button><button class="s-btn" onclick="st(1,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r2"><td class="td-n">2</td><td class="td-desc">單一零件是否可同時具有結構、導引、定位等多種功能</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(2,'pass')">✓ 符合</button><button class="s-btn" onclick="st(2,'fail')">△ 待改善</button><button class="s-btn" onclick="st(2,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r3"><td class="td-n">3</td><td class="td-desc">盡量採用市售標準件，減少客製零件種類</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(3,'pass')">✓ 符合</button><button class="s-btn" onclick="st(3,'fail')">△ 待改善</button><button class="s-btn" onclick="st(3,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r4"><td class="td-n">4</td><td class="td-desc">統一整機緊固件規格，減少換工具次數（同一公稱直徑，使用相同長度、頭型、頭穴等）</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(4,'pass')">✓ 符合</button><button class="s-btn" onclick="st(4,'fail')">△ 待改善</button><button class="s-btn" onclick="st(4,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r5"><td class="td-n">5</td><td class="td-desc">零件所有功能能否一體成型，避免額外焊接、bonding 或後加工製程</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(5,'pass')">✓ 符合</button><button class="s-btn" onclick="st(5,'fail')">△ 待改善</button><button class="s-btn" onclick="st(5,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r6"><td class="td-n">6</td><td class="td-desc">接地路徑是否能利用金屬件導通，減少額外接地線與端子</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(6,'pass')">✓ 符合</button><button class="s-btn" onclick="st(6,'fail')">△ 待改善</button><button class="s-btn" onclick="st(6,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <!-- ══ 02 組裝·防呆·檢驗 ══ -->
+  <div class="row-full card">
+    <div class="col-hdr open" onclick="tog(this)">
+      <div class="col-left"><span class="card-num">02</span><span class="card-title">組裝 · 防呆 · 檢驗</span><span class="card-sub">裝配動作、Poka-Yoke 與可視確認</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="sec-count">19 項</span><span class="col-toggle">▲ 收合</span></div>
+    </div>
+    <div class="col-body open"><table class="rt"><thead><tr><th style="width:36px">#</th><th style="text-align:left;padding-left:8px">檢查說明</th><th style="width:148px">評估結果</th><th style="width:176px;text-align:left;padding-left:6px">備註</th></tr></thead><tbody>
+      <tr id="r7"><td class="td-n">7</td><td class="td-desc">零件是否有導角、導引槽或錐面，讓組裝時自動對正</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(7,'pass')">✓ 符合</button><button class="s-btn" onclick="st(7,'fail')">△ 待改善</button><button class="s-btn" onclick="st(7,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r8"><td class="td-n">8</td><td class="td-desc">外形是否有必要設計成只能以正確方向安裝（非對稱設計），防止裝反</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(8,'pass')">✓ 符合</button><button class="s-btn" onclick="st(8,'fail')">△ 待改善</button><button class="s-btn" onclick="st(8,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r9"><td class="td-n">9</td><td class="td-desc">多件組裝後的累積公差是否在可接受範圍</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(9,'pass')">✓ 符合</button><button class="s-btn" onclick="st(9,'fail')">△ 待改善</button><button class="s-btn" onclick="st(9,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r10"><td class="td-n">10</td><td class="td-desc">Snap-fit 扣合是否有明顯的到位感，讓 OP 可確認</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(10,'pass')">✓ 符合</button><button class="s-btn" onclick="st(10,'fail')">△ 待改善</button><button class="s-btn" onclick="st(10,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r11"><td class="td-n">11</td><td class="td-desc">外觀相似但功能不同的零件，是否有顏色或刻字加以區別</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(11,'pass')">✓ 符合</button><button class="s-btn" onclick="st(11,'fail')">△ 待改善</button><button class="s-btn" onclick="st(11,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r12"><td class="td-n">12</td><td class="td-desc">Connector 選用是否有物理防呆（不對稱外形），確保無法插錯</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(12,'pass')">✓ 符合</button><button class="s-btn" onclick="st(12,'fail')">△ 待改善</button><button class="s-btn" onclick="st(12,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r13"><td class="td-n">13</td><td class="td-desc">盡量讓所有零件從同一方向裝入，避免上下翻轉產品</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(13,'pass')">✓ 符合</button><button class="s-btn" onclick="st(13,'fail')">△ 待改善</button><button class="s-btn" onclick="st(13,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r14"><td class="td-n">14</td><td class="td-desc">減少組裝過程需要旋轉的次數</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(14,'pass')">✓ 符合</button><button class="s-btn" onclick="st(14,'fail')">△ 待改善</button><button class="s-btn" onclick="st(14,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r15"><td class="td-n">15</td><td class="td-desc">避免需要先斜插再轉正的組配動作，改為直上直下</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(15,'pass')">✓ 符合</button><button class="s-btn" onclick="st(15,'fail')">△ 待改善</button><button class="s-btn" onclick="st(15,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r16"><td class="td-n">16</td><td class="td-desc">螺絲孔周圍是否有足夠空間讓工具垂直進入及取出</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(16,'pass')">✓ 符合</button><button class="s-btn" onclick="st(16,'fail')">△ 待改善</button><button class="s-btn" onclick="st(16,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r17"><td class="td-n">17</td><td class="td-desc">是否有零件需雙手同時扶持才能鎖螺絲，若有則增加定位夾持特徵</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(17,'pass')">✓ 符合</button><button class="s-btn" onclick="st(17,'fail')">△ 待改善</button><button class="s-btn" onclick="st(17,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r18"><td class="td-n">18</td><td class="td-desc">軟管、線材等難以定位的件，應排在組裝順序後段</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(18,'pass')">✓ 符合</button><button class="s-btn" onclick="st(18,'fail')">△ 待改善</button><button class="s-btn" onclick="st(18,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r19"><td class="td-n">19</td><td class="td-desc">組裝過程是否只需標準工具，無需客製專用工具</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(19,'pass')">✓ 符合</button><button class="s-btn" onclick="st(19,'fail')">△ 待改善</button><button class="s-btn" onclick="st(19,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r20"><td class="td-n">20</td><td class="td-desc">單站工時較高者，是否能以邊線預組</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(20,'pass')">✓ 符合</button><button class="s-btn" onclick="st(20,'fail')">△ 待改善</button><button class="s-btn" onclick="st(20,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r21"><td class="td-n">21</td><td class="td-desc">扣合點、螺絲是否能在組裝後目視確認到位，是否有空間劃記</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(21,'pass')">✓ 符合</button><button class="s-btn" onclick="st(21,'fail')">△ 待改善</button><button class="s-btn" onclick="st(21,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r22"><td class="td-n">22</td><td class="td-desc">序號、安規標籤的貼附位置是否平整、好貼（OP 手能進入）</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(22,'pass')">✓ 符合</button><button class="s-btn" onclick="st(22,'fail')">△ 待改善</button><button class="s-btn" onclick="st(22,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r23"><td class="td-n">23</td><td class="td-desc">線束在蓋板蓋合前是否能清楚確認路徑正確、不會被夾到</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(23,'pass')">✓ 符合</button><button class="s-btn" onclick="st(23,'fail')">△ 待改善</button><button class="s-btn" onclick="st(23,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r24"><td class="td-n">24</td><td class="td-desc">最常需更換的消耗品是否可在不完全拆解下取出</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(24,'pass')">✓ 符合</button><button class="s-btn" onclick="st(24,'fail')">△ 待改善</button><button class="s-btn" onclick="st(24,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r25"><td class="td-n">25</td><td class="td-desc">若零件漏裝或裝反，是否能在下一工站目視或量測發現，避免往後流</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(25,'pass')">✓ 符合</button><button class="s-btn" onclick="st(25,'fail')">△ 待改善</button><button class="s-btn" onclick="st(25,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <!-- ══ 03 夾持·搬運·治具 ══ -->
+  <div class="row-full card">
+    <div class="col-hdr open" onclick="tog(this)">
+      <div class="col-left"><span class="card-num">03</span><span class="card-title">夾持 · 搬運 · 治具</span><span class="card-sub">零件夾持設計、搬運安全與治具規範</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="sec-count">6 項</span><span class="col-toggle">▲ 收合</span></div>
+    </div>
+    <div class="col-body open"><table class="rt"><thead><tr><th style="width:36px">#</th><th style="text-align:left;padding-left:8px">檢查說明</th><th style="width:148px">評估結果</th><th style="width:176px;text-align:left;padding-left:6px">備註</th></tr></thead><tbody>
+      <tr id="r26"><td class="td-n">26</td><td class="td-desc">小零件是否有平面或溝槽，讓鑷子或夾具穩定夾持</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(26,'pass')">✓ 符合</button><button class="s-btn" onclick="st(26,'fail')">△ 待改善</button><button class="s-btn" onclick="st(26,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r27"><td class="td-n">27</td><td class="td-desc">是否有定位特徵？各工站定位點是否一致，避免每站重新對位</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(27,'pass')">✓ 符合</button><button class="s-btn" onclick="st(27,'fail')">△ 待改善</button><button class="s-btn" onclick="st(27,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r28"><td class="td-n">28</td><td class="td-desc">外觀件、busbar、電極在搬運時是否有臨時保護結構（凸耳、保護膜黏附面、防短路治具）</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(28,'pass')">✓ 符合</button><button class="s-btn" onclick="st(28,'fail')">△ 待改善</button><button class="s-btn" onclick="st(28,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r29"><td class="td-n">29</td><td class="td-desc">單人能否在不使用輔助工具下安全搬運次組件（建議 &lt; 15 kg）</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(29,'pass')">✓ 符合</button><button class="s-btn" onclick="st(29,'fail')">△ 待改善</button><button class="s-btn" onclick="st(29,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r30"><td class="td-n">30</td><td class="td-desc">涉及靜電敏感元件時，治具是否為導電或防靜電材質，並有接地設計</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(30,'pass')">✓ 符合</button><button class="s-btn" onclick="st(30,'fail')">△ 待改善</button><button class="s-btn" onclick="st(30,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r31"><td class="td-n">31</td><td class="td-desc">產品放在治具上時是否有防呆設計或標示，避免放反導致撞機或報廢</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(31,'pass')">✓ 符合</button><button class="s-btn" onclick="st(31,'fail')">△ 待改善</button><button class="s-btn" onclick="st(31,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <!-- ══ 04 自動化 ══ -->
+  <div class="row-full card">
+    <div class="col-hdr open" onclick="tog(this)">
+      <div class="col-left"><span class="card-num">04</span><span class="card-title">自動化</span><span class="card-sub">自動化設備相容性與進料設計</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="sec-count">4 項</span><span class="col-toggle">▲ 收合</span></div>
+    </div>
+    <div class="col-body open"><table class="rt"><thead><tr><th style="width:36px">#</th><th style="text-align:left;padding-left:8px">檢查說明</th><th style="width:148px">評估結果</th><th style="width:176px;text-align:left;padding-left:6px">備註</th></tr></thead><tbody>
+      <tr id="r32"><td class="td-n">32</td><td class="td-desc">薄片、橡膠、小型零件是否有防止疊放黏連的設計（導角、凸點）</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(32,'pass')">✓ 符合</button><button class="s-btn" onclick="st(32,'fail')">△ 待改善</button><button class="s-btn" onclick="st(32,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r33"><td class="td-n">33</td><td class="td-desc">螺絲頭型與鎖附角度是否與自動化設備相容</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(33,'pass')">✓ 符合</button><button class="s-btn" onclick="st(33,'fail')">△ 待改善</button><button class="s-btn" onclick="st(33,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r34"><td class="td-n">34</td><td class="td-desc">零件最小特徵尺寸是否在自動化設備可處理範圍內</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(34,'pass')">✓ 符合</button><button class="s-btn" onclick="st(34,'fail')">△ 待改善</button><button class="s-btn" onclick="st(34,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r35"><td class="td-n">35</td><td class="td-desc">點膠路徑是否為簡單直線或圓形，可由點膠機穩定執行，避免複雜曲線</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(35,'pass')">✓ 符合</button><button class="s-btn" onclick="st(35,'fail')">△ 待改善</button><button class="s-btn" onclick="st(35,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <!-- ══ 05 模組化 ══ -->
+  <div class="row-full card">
+    <div class="col-hdr open" onclick="tog(this)">
+      <div class="col-left"><span class="card-num">05</span><span class="card-title">模組化</span><span class="card-sub">次組件獨立測試與跨平台共用</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="sec-count">3 項</span><span class="col-toggle">▲ 收合</span></div>
+    </div>
+    <div class="col-body open"><table class="rt"><thead><tr><th style="width:36px">#</th><th style="text-align:left;padding-left:8px">檢查說明</th><th style="width:148px">評估結果</th><th style="width:176px;text-align:left;padding-left:6px">備註</th></tr></thead><tbody>
+      <tr id="r36"><td class="td-n">36</td><td class="td-desc">每個次組件在組入整機前，是否能單獨進行功能測試（Hipot、氣密）</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(36,'pass')">✓ 符合</button><button class="s-btn" onclick="st(36,'fail')">△ 待改善</button><button class="s-btn" onclick="st(36,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r37"><td class="td-n">37</td><td class="td-desc">產品介面（吊掛結構、connector 規格、水管接頭）是否統一，方便跨產品共用</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(37,'pass')">✓ 符合</button><button class="s-btn" onclick="st(37,'fail')">△ 待改善</button><button class="s-btn" onclick="st(37,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r38"><td class="td-n">38</td><td class="td-desc">次組件設計是否能跨產品共用，降低開發與庫存成本</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(38,'pass')">✓ 符合</button><button class="s-btn" onclick="st(38,'fail')">△ 待改善</button><button class="s-btn" onclick="st(38,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <!-- ══ 06 表面處理 ══ -->
+  <div class="row-full card">
+    <div class="col-hdr open" onclick="tog(this)">
+      <div class="col-left"><span class="card-num">06</span><span class="card-title">表面處理</span><span class="card-sub">塗層公差、嵌件設計與腐蝕防護</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="sec-count">5 項</span><span class="col-toggle">▲ 收合</span></div>
+    </div>
+    <div class="col-body open"><table class="rt"><thead><tr><th style="width:36px">#</th><th style="text-align:left;padding-left:8px">檢查說明</th><th style="width:148px">評估結果</th><th style="width:176px;text-align:left;padding-left:6px">備註</th></tr></thead><tbody>
+      <tr id="r39"><td class="td-n">39</td><td class="td-desc">ED、陽極處理等膜厚是否明確定義，鎖附孔是否遮蔽，避免組裝時剝落或卡死</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(39,'pass')">✓ 符合</button><button class="s-btn" onclick="st(39,'fail')">△ 待改善</button><button class="s-btn" onclick="st(39,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r40"><td class="td-n">40</td><td class="td-desc">塑膠件如有鎖附需求是否採用熱熔 nut 或 insert nut，確保反覆拆裝強度</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(40,'pass')">✓ 符合</button><button class="s-btn" onclick="st(40,'fail')">△ 待改善</button><button class="s-btn" onclick="st(40,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r41"><td class="td-n">41</td><td class="td-desc">含磁鐵或導磁材料零件是否有保護措施，避免組裝中吸附異物或互相干擾</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(41,'pass')">✓ 符合</button><button class="s-btn" onclick="st(41,'fail')">△ 待改善</button><button class="s-btn" onclick="st(41,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r42"><td class="td-n">42</td><td class="td-desc">異種金屬接觸面（如鋁與不鏽鋼）是否設有絕緣墊片或表面處理，避免電位差腐蝕</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(42,'pass')">✓ 符合</button><button class="s-btn" onclick="st(42,'fail')">△ 待改善</button><button class="s-btn" onclick="st(42,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r43"><td class="td-n">43</td><td class="td-desc">需熱處理零件是否預先評估變形量並納入圖面公差，確保不影響後續組裝配合</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(43,'pass')">✓ 符合</button><button class="s-btn" onclick="st(43,'fail')">△ 待改善</button><button class="s-btn" onclick="st(43,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <!-- ══ 07 成本與供應鏈 ══ -->
+  <div class="row-full card">
+    <div class="col-hdr open" onclick="tog(this)">
+      <div class="col-left"><span class="card-num">07</span><span class="card-title">成本與供應鏈</span><span class="card-sub">多源採購與斷料風險管控</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="sec-count">1 項</span><span class="col-toggle">▲ 收合</span></div>
+    </div>
+    <div class="col-body open"><table class="rt"><thead><tr><th style="width:36px">#</th><th style="text-align:left;padding-left:8px">檢查說明</th><th style="width:148px">評估結果</th><th style="width:176px;text-align:left;padding-left:6px">備註</th></tr></thead><tbody>
+      <tr id="r44"><td class="td-n">44</td><td class="td-desc">零件或原料是否可從多家供應商採購，避免壟斷或斷料風險</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(44,'pass')">✓ 符合</button><button class="s-btn" onclick="st(44,'fail')">△ 待改善</button><button class="s-btn" onclick="st(44,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <!-- ══ 08 安全 ══ -->
+  <div class="row-full card">
+    <div class="col-hdr open" onclick="tog(this)">
+      <div class="col-left"><span class="card-num">08</span><span class="card-title">安全</span><span class="card-sub">作業安全、人因工程與環保合規</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="sec-count">4 項</span><span class="col-toggle">▲ 收合</span></div>
+    </div>
+    <div class="col-body open"><table class="rt"><thead><tr><th style="width:36px">#</th><th style="text-align:left;padding-left:8px">檢查說明</th><th style="width:148px">評估結果</th><th style="width:176px;text-align:left;padding-left:6px">備註</th></tr></thead><tbody>
+      <tr id="r45"><td class="td-n">45</td><td class="td-desc">鈑金件、鑄件是否有在圖面標注去毛邊要求，且設計上無直角利邊，避免割傷 OP</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(45,'pass')">✓ 符合</button><button class="s-btn" onclick="st(45,'fail')">△ 待改善</button><button class="s-btn" onclick="st(45,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r46"><td class="td-n">46</td><td class="td-desc">塑膠件是否有標注材料，方便產品結束後分類回收</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(46,'pass')">✓ 符合</button><button class="s-btn" onclick="st(46,'fail')">△ 待改善</button><button class="s-btn" onclick="st(46,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r47"><td class="td-n">47</td><td class="td-desc">組裝動作是否避免持續施力、高頻扭轉等易造成職業性重複傷害（RSI）的動作設計</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(47,'pass')">✓ 符合</button><button class="s-btn" onclick="st(47,'fail')">△ 待改善</button><button class="s-btn" onclick="st(47,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+      <tr id="r48"><td class="td-n">48</td><td class="td-desc">線束、接合面、動件是否有良好固定及足夠的周邊淨空，避免使用期間鬆動產生異音或功能失效</td><td class="td-status"><div class="btn-grp"><button class="s-btn" onclick="st(48,'pass')">✓ 符合</button><button class="s-btn" onclick="st(48,'fail')">△ 待改善</button><button class="s-btn" onclick="st(48,'na')">— N/A</button></div></td><td class="td-note"><input type="text" placeholder="備註…"></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <div class="footer">Design for Assembly Checklist</div>
+</div>
+
+<script>
+  const TOTAL = 48;
+  const state = {};
+
+  function st(id, val) {
+    const row  = document.getElementById('r' + id);
+    const btns = row.querySelectorAll('.s-btn');
+    if (state[id] === val) {
+      state[id] = undefined;
+      row.className = '';
+      btns.forEach(b => b.className = 's-btn');
+    } else {
+      state[id] = val;
+      row.className = val === 'pass' ? 'st-pass' : val === 'fail' ? 'st-fail' : 'st-na';
+      btns.forEach(b => {
+        b.className = 's-btn';
+        if (b.textContent.includes('符合')   && val === 'pass') b.classList.add('act-pass');
+        if (b.textContent.includes('待改善') && val === 'fail') b.classList.add('act-fail');
+        if (b.textContent.includes('N/A')    && val === 'na')   b.classList.add('act-na');
+      });
+    }
+    const vals = Object.values(state).filter(Boolean);
+    const p = vals.filter(v=>v==='pass').length;
+    const f = vals.filter(v=>v==='fail').length;
+    const n = vals.filter(v=>v==='na').length;
+    document.getElementById('s-pass').textContent = p;
+    document.getElementById('s-fail').textContent = f;
+    document.getElementById('s-na').textContent   = n;
+    document.getElementById('s-open').textContent = TOTAL - p - f - n;
+  }
+
+  function tog(hdr) {
+    const body   = hdr.nextElementSibling;
+    const toggle = hdr.querySelector('.col-toggle');
+    const open   = body.classList.toggle('open');
+    hdr.classList.toggle('open', open);
+    toggle.textContent = open ? '▲ 收合' : '▼ 展開';
+  }
+</script>
+</body>
+</html>
